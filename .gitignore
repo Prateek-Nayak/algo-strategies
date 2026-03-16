@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Large data — not committed
+backtesting/data/
+backtesting/results/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
