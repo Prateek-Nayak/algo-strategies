@@ -1,0 +1,3 @@
+[submodule "orb-multibroker"]
+	path = orb-multibroker
+	url = https://github.com/Prateek-Nayak/orb-multibroker.git
