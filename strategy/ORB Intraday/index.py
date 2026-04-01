@@ -45,29 +45,20 @@ proc_env["DHAN_PIN"] = pin
 proc_env["DHAN_TOTP_SECRET"] = totp_secret
 proc_env["DHAN_AUTO_REFRESH"] = "true"
 
+# IP binding: set env var for registry.py to create an IP-bound session.
+# All API calls (auth, data, orders) will originate from this IP.
 if source_ip:
     proc_env["ALGO_DASHBOARD_SOURCE_IP"] = source_ip
 
+# Shared token file: per-account token file for cross-process token sharing
+secrets_dir = orb_repo / ".secrets"
+token_file = secrets_dir / f"dhan_token_{client_id}.txt"
+proc_env["DHAN_ACCESS_TOKEN_FILE"] = str(token_file)
+
 preamble = """
-import os
 import sys
-
-source_ip = os.environ.get("ALGO_DASHBOARD_SOURCE_IP", "")
-if source_ip:
-    from requests.adapters import HTTPAdapter
-
-    _orig_init_pm = HTTPAdapter.init_poolmanager
-
-    def _patched_init_pm(self, *args, **kwargs):
-        kwargs["source_address"] = (source_ip, 0)
-        _orig_init_pm(self, *args, **kwargs)
-
-    HTTPAdapter.init_poolmanager = _patched_init_pm
-    print(f"[IP-BIND] All HTTP requests will originate from {source_ip}")
-
 sys.argv = ["multi_broker", "--mode", "live", "--strategy-id", "orb_intraday"]
 from multi_broker.__main__ import main
-
 main()
 """
 
@@ -77,7 +68,8 @@ if src_path.exists():
 
 print(f"[WRAPPER] Launching ORB Intraday for account {idx}")
 print(f"[WRAPPER] Repo: {orb_repo}")
-print(f"[WRAPPER] IP binding: {source_ip or 'disabled'}")
+print(f"[WRAPPER] IP binding: {source_ip or 'disabled (no OUTBOUND_IP)'}")
+print(f"[WRAPPER] Token file: {token_file}")
 print(f"[WRAPPER] Log dir: {log_dir}")
 
 result = subprocess.run(
@@ -87,3 +79,4 @@ result = subprocess.run(
 )
 
 sys.exit(result.returncode)
+
