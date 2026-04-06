@@ -12,3 +12,5 @@ backtesting/results/
 .idea/
 .DS_Store
 Gap_EMA
+
+.codesight/
