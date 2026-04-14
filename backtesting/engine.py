@@ -443,14 +443,19 @@ def run_backtest(spot, spot_raw, opts, cfg):
 
                 opt_sl_hit, opt_tgt_hit = option_level_hits(obar, trade_mode, sl_price, tgt_price)
 
-                if opt_tgt_hit:
-                    exit_price = tgt_price
-                    exit_reason = "TARGET"
-                    exit_time = curr_t
-                    break
-                elif opt_sl_hit:
+                # Pessimistic same-bar tie-break: SPOT_SL > OPT_SL > TARGET.
+                # When both SL and target are satisfied within the same 1-min
+                # option bar, OHLC cannot tell us the order of events, so we
+                # attribute the exit to the stop (worst-case for the trader)
+                # rather than assuming the favourable target fill.
+                if opt_sl_hit:
                     exit_price = sl_price
                     exit_reason = "OPT_SL"
+                    exit_time = curr_t
+                    break
+                elif opt_tgt_hit:
+                    exit_price = tgt_price
+                    exit_reason = "TARGET"
                     exit_time = curr_t
                     break
                 else:
