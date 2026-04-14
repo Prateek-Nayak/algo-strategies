@@ -60,10 +60,11 @@ def shift_time_by_minutes(t_value, minutes):
 
 def resolve_spot_sl_exit(option_bar):
     """
-    Exit at the current option candle close. This function is called on the
-    option bar aligned with the 1-min spot candle whose high/low touched the SL.
+    Exit at the current option candle open. Spot SL is known only when the
+    1-min spot candle closes; this function is called on the first option bar
+    available at-or-after that detection time.
     """
-    return option_bar["close"], option_bar["time"]
+    return option_bar["open"], option_bar["time"]
 
 
 def normalize_trade_mode(value):
@@ -413,7 +414,7 @@ def run_backtest(spot, spot_raw, opts, cfg):
                 opt_close = obar["close"]
                 opt_high = obar["high"]
                 opt_low_b = obar["low"]
-                spot_sl_hit = False
+                spot_sl_detection_time = None
                 while (
                     use_spot_sl
                     and spot_idx < len(post_spot_list)
@@ -424,7 +425,10 @@ def run_backtest(spot, spot_raw, opts, cfg):
                 ):
                     spot_bar = post_spot_list[spot_idx]
                     if spot_sl_touched(spot_bar, sig_dir, spot_sl):
-                        spot_sl_hit = True
+                        if spot_sl_detection_time is None:
+                            spot_sl_detection_time = shift_time_by_minutes(
+                                spot_bar["time"], 1
+                            )
                     spot_idx += 1
                 while (
                     not use_spot_sl
@@ -436,7 +440,7 @@ def run_backtest(spot, spot_raw, opts, cfg):
                 ):
                     spot_idx += 1
 
-                if spot_sl_hit:
+                if spot_sl_detection_time is not None:
                     exit_price, exit_time = resolve_spot_sl_exit(obar)
                     exit_reason = "SPOT_SL"
                     break
