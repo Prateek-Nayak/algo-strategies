@@ -75,6 +75,18 @@ import engine as shared_engine
 
 warnings.filterwarnings('ignore')
 
+SPOT_LOAD_COLUMNS = ["date", "open", "high", "low", "close"]
+OPTION_LOAD_COLUMNS = [
+    "datetime_ist",
+    "open",
+    "high",
+    "low",
+    "close",
+    "actual_strike",
+    "expiry_code",
+    "option_type",
+]
+
 for stream in (sys.stdout, sys.stderr):
     if hasattr(stream, 'reconfigure'):
         try: stream.reconfigure(encoding='utf-8', errors='replace')
@@ -165,7 +177,7 @@ def normalize_loaded_data(df, path):
     df['time'] = df['datetime_ist'].dt.time
     return df
 
-def load_dataset_folder(path, date_from=None, date_to=None, label='data'):
+def load_dataset_folder(path, date_from=None, date_to=None, label='data', columns=None):
     pq = sorted(glob.glob(os.path.join(path, '**', '*.parquet'), recursive=True))
     cs = sorted(glob.glob(os.path.join(path, '**', '*.csv'), recursive=True))
     ft, files = ('parquet', pq) if pq else ('csv', cs) if cs else (None, [])
@@ -174,7 +186,13 @@ def load_dataset_folder(path, date_from=None, date_to=None, label='data'):
     if not files: raise FileNotFoundError(f"No {ft} files for {date_from}-{date_to}")
     dfs = []
     for f in files:
-        try: dfs.append(pd.read_parquet(f) if ft == 'parquet' else pd.read_csv(f))
+        try:
+            if ft == 'parquet':
+                dfs.append(pd.read_parquet(f, columns=columns))
+            elif columns:
+                dfs.append(pd.read_csv(f, usecols=lambda col: col in columns))
+            else:
+                dfs.append(pd.read_csv(f))
         except Exception as e: print(f"  Warn: {f} — {e}")
     df = pd.concat(dfs, ignore_index=True)
     df = normalize_loaded_data(df, path)
@@ -196,8 +214,20 @@ def resample_spot(df, minutes):
     return out.sort_values('datetime_ist').reset_index(drop=True)
 
 def load_data(cfg):
-    spot_raw = load_dataset_folder(cfg['SPOT_DATA_PATH'], cfg['DATE_FROM'], cfg['DATE_TO'], 'Spot')
-    opts = load_dataset_folder(cfg['OPT_DATA_PATH'],  cfg['DATE_FROM'], cfg['DATE_TO'], 'Options')
+    spot_raw = load_dataset_folder(
+        cfg['SPOT_DATA_PATH'],
+        cfg['DATE_FROM'],
+        cfg['DATE_TO'],
+        'Spot',
+        columns=SPOT_LOAD_COLUMNS,
+    )
+    opts = load_dataset_folder(
+        cfg['OPT_DATA_PATH'],
+        cfg['DATE_FROM'],
+        cfg['DATE_TO'],
+        'Options',
+        columns=OPTION_LOAD_COLUMNS,
+    )
     opts = opts[opts['expiry_code'] == cfg['EXPIRY_CODE']].reset_index(drop=True)
     print(f"  Options after expiry filter (code={cfg['EXPIRY_CODE']}): {len(opts):,} rows")
     mins = cfg.get('SPOT_CANDLE_MINUTES', 1)

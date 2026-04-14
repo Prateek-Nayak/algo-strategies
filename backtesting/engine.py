@@ -19,6 +19,17 @@ BASE_DIR = Path(__file__).parent
 ALLOWED_DIRECTIONS = {"both", "long_only", "short_only"}
 ALLOWED_TRADE_MODES = {"buy", "sell"}
 ALLOWED_SPOT_SL_MODES = {"breakout_level", "opposite"}
+SPOT_LOAD_COLUMNS = ["date", "open", "high", "low", "close"]
+OPTION_LOAD_COLUMNS = [
+    "datetime_ist",
+    "open",
+    "high",
+    "low",
+    "close",
+    "actual_strike",
+    "expiry_code",
+    "option_type",
+]
 
 
 # =============================================================================
@@ -201,7 +212,7 @@ def normalize_loaded_data(df, path):
     return df
 
 
-def load_dataset_folder(path, date_from=None, date_to=None, label="data"):
+def load_dataset_folder(path, date_from=None, date_to=None, label="data", columns=None):
     pq = sorted(glob.glob(os.path.join(path, "**", "*.parquet"), recursive=True))
     cs = sorted(glob.glob(os.path.join(path, "**", "*.csv"), recursive=True))
     ft, files = ("parquet", pq) if pq else ("csv", cs) if cs else (None, [])
@@ -213,7 +224,12 @@ def load_dataset_folder(path, date_from=None, date_to=None, label="data"):
     dfs = []
     for f in files:
         try:
-            dfs.append(pd.read_parquet(f) if ft == "parquet" else pd.read_csv(f))
+            if ft == "parquet":
+                dfs.append(pd.read_parquet(f, columns=columns))
+            elif columns:
+                dfs.append(pd.read_csv(f, usecols=lambda col: col in columns))
+            else:
+                dfs.append(pd.read_csv(f))
         except Exception as e:
             print(f"  Warn: {f} — {e}")
     df = pd.concat(dfs, ignore_index=True)
@@ -258,8 +274,20 @@ def load_data(cfg):
     if not os.path.isabs(opt_path):
         opt_path = str(BASE_DIR / opt_path)
 
-    spot_raw = load_dataset_folder(spot_path, cfg["DATE_FROM"], cfg["DATE_TO"], "Spot")
-    opts = load_dataset_folder(opt_path, cfg["DATE_FROM"], cfg["DATE_TO"], "Options")
+    spot_raw = load_dataset_folder(
+        spot_path,
+        cfg["DATE_FROM"],
+        cfg["DATE_TO"],
+        "Spot",
+        columns=SPOT_LOAD_COLUMNS,
+    )
+    opts = load_dataset_folder(
+        opt_path,
+        cfg["DATE_FROM"],
+        cfg["DATE_TO"],
+        "Options",
+        columns=OPTION_LOAD_COLUMNS,
+    )
     opts = opts[opts["expiry_code"] == cfg["EXPIRY_CODE"]].reset_index(drop=True)
     print(f"  Options after expiry filter (code={cfg['EXPIRY_CODE']}): {len(opts):,} rows")
     mins = cfg.get("SPOT_CANDLE_MINUTES", 1)
